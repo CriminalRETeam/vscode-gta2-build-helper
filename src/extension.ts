@@ -5,16 +5,27 @@ import * as fs from 'fs';
 interface LogEntry {
     file_path: string;
     line_number: number;
-    log_type: 'warning' | 'error';
+    log_type: 'warning' | 'error' | 'function_verification';
     error_code?: string;
     message: string;
 }
 
 export function activate(context: vscode.ExtensionContext) {
     const treeDataProvider = new LogTreeDataProvider(vscode.workspace.rootPath);
-    context.subscriptions.push(
-        vscode.window.registerTreeDataProvider('buildListView', treeDataProvider)
-    );
+    const view = vscode.window.createTreeView('buildListView', { treeDataProvider });
+
+    context.subscriptions.push(view);
+
+    function updateBadge() {
+        const entryCount = treeDataProvider.getEntryCount();
+        view.badge = { value: entryCount, tooltip: `${entryCount} Entries` };
+    }
+
+    treeDataProvider.onDidChangeTreeData(() => {
+        updateBadge();
+    });
+
+    updateBadge();
 }
 
 class LogTreeDataProvider implements vscode.TreeDataProvider<LogTreeItem> {
@@ -77,14 +88,26 @@ class LogTreeDataProvider implements vscode.TreeDataProvider<LogTreeItem> {
     
         return sortedEntries.map(entry => new LogTreeItem(entry));
     }
+
+    getEntryCount(): number {
+        return this.logEntries.length;
+    }
 }
 
 class LogTreeItem extends vscode.TreeItem {
     constructor(public readonly logEntry: LogEntry) {
+        if (logEntry.log_type === 'function_verification') {
+            super(`${logEntry.message}() function verification failed!`, vscode.TreeItemCollapsibleState.None);
+            this.iconPath = new vscode.ThemeIcon('error', new vscode.ThemeColor('list.errorForeground'));
+            this.command = {
+                command: 'workbench.action.findInFiles',
+                title: 'Find In Files',
+                arguments: [{ query: logEntry.message }]
+            };
+            return;
+        }
+        
         super(`${path.basename(logEntry.file_path)}:${logEntry.line_number}`, vscode.TreeItemCollapsibleState.None);
-
-        this.description = `${logEntry.error_code ? `(${logEntry.error_code})` : ''}: ${logEntry.message}`;
-        this.tooltip = `${logEntry.file_path}\nLine: ${logEntry.line_number}\nType: ${logEntry.log_type}\n${logEntry.error_code ? `Code: ${logEntry.error_code}\n` : ''}Message: ${logEntry.message}`;
 
         switch (logEntry.log_type) {
             case 'warning':
@@ -96,6 +119,9 @@ class LogTreeItem extends vscode.TreeItem {
             default:
                 break;
         }
+
+        this.description = `${logEntry.error_code ? `(${logEntry.error_code})` : ''}: ${logEntry.message}`;
+        this.tooltip = `${logEntry.file_path}\nLine: ${logEntry.line_number}\nType: ${logEntry.log_type}\n${logEntry.error_code ? `Code: ${logEntry.error_code}\n` : ''}Message: ${logEntry.message}`;
 
         this.command = {
             command: 'vscode.open',

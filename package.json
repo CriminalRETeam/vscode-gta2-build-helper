@@ -2,7 +2,8 @@
   "name": "gta2-build-helper",
   "displayName": "GTA2 Build Helper",
   "description": "",
-  "version": "0.0.1",
+  "version": "0.0.2",
+  "publisher": "CriminalRETeam",
   "engines": {
     "vscode": "^1.99.0"
   },
